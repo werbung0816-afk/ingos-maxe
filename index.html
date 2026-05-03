@@ -25,13 +25,13 @@ header{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;
 .logo-photo-wrap{position:relative;flex-shrink:0;}
 .logo-photo{display:block;}
 .logo-star{display:none;}
-.logo-text{display:flex;flex-direction:column;justify-content:center;line-height:1.2;}
+.logo-text{display:flex;flex-direction:column;justify-content:center;line-height:1.2;gap:4px;}
 .logo-ingos{font-family:'Cinzel',serif;font-size:9px;letter-spacing:5px;color:rgba(212,175,55,.5);}
 .logo-main{font-family:'Cinzel',serif;font-size:26px;font-weight:900;letter-spacing:6px;color:var(--gold);line-height:1;}
 
 /* ── MAIN GAME AREA ── */
-.game-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-height:100vh;padding:80px 20px 40px;gap:0;width:100%;max-width:500px;}
+.game-wrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  min-height:100vh;padding:90px 20px 20px;gap:0;width:100%;max-width:500px;}
 
 /* ── STATUS ── */
 #status-msg{font-family:'Cinzel',serif;font-size:13px;letter-spacing:2px;
@@ -39,26 +39,27 @@ header{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;
 #status-msg.highlight{color:var(--gold);}
 
 /* ── CUP CONTAINER ── */
-.cup-scene{position:relative;width:220px;height:310px;margin:0 auto;}
+.cup-scene{position:relative;width:260px;height:370px;margin:0 auto;}
 
 /* Die area — behind the cup */
 .dice-area{
   position:absolute;bottom:0;left:50%;transform:translateX(-50%);
-  display:flex;gap:18px;align-items:flex-end;justify-content:center;
-  padding-bottom:12px;
+  display:flex;gap:20px;align-items:flex-end;justify-content:center;
+  padding-bottom:14px;
   transition:opacity .3s;
 }
 
 /* Cup wrapper — slides up/down */
-#cup-wrap{ /* big cup */
+#cup-wrap{
   position:absolute;bottom:0;left:50%;transform:translateX(-50%);
-  width:190px;
+  width:220px;
   cursor:grab;
   transition:bottom .4s cubic-bezier(.25,.8,.25,1);
   touch-action:none;
   user-select:none;
 }
-#cup-wrap.lifted{bottom:185px;}
+#cup-wrap svg{width:100%;height:auto;display:block;}
+#cup-wrap.lifted{bottom:160px;}
 #cup-wrap.shaking{animation:cupShake .4s ease-in-out;}
 @keyframes cupShake{
   0%{transform:translateX(-50%) rotate(0deg);}
@@ -71,7 +72,7 @@ header{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;
 }
 
 /* Die styles */
-.die{width:60px;height:60px;border-radius:10px;background:#f5f0e8;
+.die{width:70px;height:70px;border-radius:11px;background:#f5f0e8;
   border:2px solid #d4d0c8;display:inline-flex;align-items:center;justify-content:center;
   position:relative;box-shadow:0 4px 14px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.9);
   transition:transform .15s;}
@@ -109,11 +110,11 @@ header{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;
 #result-sub{font-size:11px;color:var(--text2);letter-spacing:3px;
   font-family:'Cinzel',serif;text-align:center;min-height:16px;}
 
-@media(max-width:400px){
-  .die{width:52px;height:52px;border-radius:9px;}
-  .cup-scene{width:190px;height:280px;}
-  #cup-wrap{ /* big cup */width:120px;}
-  #cup-wrap.lifted{bottom:160px;}
+@media(max-width:430px){
+  .die{width:64px;height:64px;border-radius:10px;}
+  .cup-scene{width:240px;height:350px;}
+  #cup-wrap{width:200px;}
+  #cup-wrap.lifted{bottom:150px;}
 }
 </style>
 </head>
@@ -218,6 +219,26 @@ function playRoll(){
     const src=ac.createBufferSource();src.buffer=diceAudioBuf;
     const g=ac.createGain();g.gain.value=0.9;
     src.connect(g);g.connect(ac.destination);src.start();
+  }catch(e){}
+}
+function playWhoosh(up=true){
+  try{
+    const ac=getAC();if(!ac)return;
+    const dur=0.55,sr=ac.sampleRate;
+    const buf=ac.createBuffer(1,Math.floor(sr*dur),sr);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.2);
+    const src=ac.createBufferSource();src.buffer=buf;
+    const filt=ac.createBiquadFilter();
+    filt.type='bandpass';filt.Q.value=0.7;
+    const fStart=up?1400:200, fEnd=up?180:1100;
+    filt.frequency.setValueAtTime(fStart,ac.currentTime);
+    filt.frequency.exponentialRampToValueAtTime(fEnd,ac.currentTime+dur);
+    const g=ac.createGain();
+    g.gain.setValueAtTime(3.0,ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01,ac.currentTime+dur);
+    src.connect(filt);filt.connect(g);g.connect(ac.destination);
+    src.start();
   }catch(e){}
 }
 
@@ -326,6 +347,7 @@ function startDrag(e){
   isDragging=true;
   dragStartY=getY(e);
   cup.style.transition='none';
+  playWhoosh(!isLifted);
 }
 window.addEventListener('mousemove',onDrag);
 window.addEventListener('touchmove',onDrag,{passive:false});
@@ -334,13 +356,12 @@ function onDrag(e){
   if(e.cancelable)e.preventDefault();
   const dy=dragStartY-getY(e); // positive = dragged up
   const scene=document.querySelector('.cup-scene');
-  const maxLift=185;
+  const maxLift=160;
   const currentBase=isLifted?maxLift:0;
   const newBottom=Math.max(0,Math.min(maxLift,currentBase+dy));
   cup.style.bottom=newBottom+'px';
-  // Show/hide result based on threshold
-  if(newBottom>90&&!isLifted){showResult();}
-  else if(newBottom<90&&isLifted){hideResult();}
+  if(newBottom>80&&!isLifted){showResult();}
+  else if(newBottom<80&&isLifted){hideResult();}
 }
 window.addEventListener('mouseup',endDrag);
 window.addEventListener('touchend',endDrag);
@@ -349,12 +370,13 @@ function endDrag(e){
   isDragging=false;
   cup.style.transition='bottom .4s cubic-bezier(.25,.8,.25,1)';
   const cur=parseInt(cup.style.bottom)||0;
-  if(cur>90){liftCup();}else{lowerCup();}
+  if(cur>80){liftCup();}else{lowerCup();}
 }
 
 // Also allow tap/click to toggle
 cup.addEventListener('click',(e)=>{
   if(!hasRolled)return;
+  playWhoosh(!isLifted);
   if(isLifted)lowerCup();else liftCup();
 });
 </script>
